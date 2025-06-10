@@ -14,7 +14,8 @@ I created this plugin because I refused to use IntelliJ and I used to use Apache
 - [x] Optional proxy support
 - [ ] Create new notebook
 - [ ] Delete notebook
-- [ ] Restart interpreter
+- [x] Restart interpreter
+- [x] Stop interpreter
 - [x] Create new paragraph
 - [ ] Delete paragraph
 - [ ] Search in all notebooks
@@ -41,6 +42,8 @@ Use your favorite plugin manager to install this plugin. For example, using lazy
 - Saving changes: use `:w` to save changes in a paragraph.
 - Running code: use `<leader>r` to run code in a paragraph.
 - Adding a new paragraph: use `<leader>n`.
+- Restart interpreter: `:ZeppelinRestartInterpreter <settingId> [noteId]`
+- Stop interpreter: `:ZeppelinStopInterpreter <settingId>`
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
