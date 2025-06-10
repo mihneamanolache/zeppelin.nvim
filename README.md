@@ -52,6 +52,7 @@ also attached automatically when available. Ensure that `nvim-lspconfig` is
 configured for `metals` so that code completion and other LSP features work as
 expected.
 
+
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

@@ -125,7 +125,9 @@ function M.save_current_paragraph()
     local saveUrl = string.format("%s/api/notebook/%s/paragraph/%s", config.options.ZEPPELIN_URL, notebookId, paragraphId)
 
     -- Get updated code from buffer
-    local new_code = table.concat(vim.api.nvim_buf_get_lines(bufnr, 1, -1, false), "\n")
+    -- Grab all lines from the buffer. Index 0 is the first line in Neovim,
+    -- so starting from 1 would drop the first line of code.
+    local new_code = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
 
     local payload = vim.fn.json_encode({ text = new_code })
 
@@ -165,6 +167,10 @@ function M.save_current_paragraph()
                     ui.show_popup("Failed to save paragraph!\n\n" .. response, { width = 80, height = 10 })
                     return
                 end
+
+                -- Update local cache with new code so navigating away
+                -- and back doesn't restore the old text.
+                paragraphs[idx].text = new_code
 
                 ui.show_popup("Paragraph saved successfully!", { width = 40, height = 5 })
             end)
