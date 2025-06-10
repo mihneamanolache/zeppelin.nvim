@@ -47,9 +47,16 @@ local function render_paragraph(bufnr, paragraphs, index)
 
     vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-    vim.api.nvim_buf_set_option(bufnr, "filetype", detect_interpreter(code_text))
+    local ft = detect_interpreter(code_text)
+    vim.api.nvim_buf_set_option(bufnr, "filetype", ft)
     vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-    local clients = vim.lsp.buf_get_clients(bufnr) 
+    if ft == "scala" and #vim.lsp.get_active_clients({bufnr = bufnr}) == 0 then
+        local ok, _ = pcall(vim.cmd, "LspStart")
+        if not ok then
+            vim.notify("Failed to start Scala LSP server", vim.log.levels.WARN)
+        end
+    end
+    local clients = vim.lsp.buf_get_clients(bufnr)
     if #clients > 0 then
         for _, client in ipairs(clients) do
             if not vim.lsp.buf_is_attached(bufnr, client.id) then
