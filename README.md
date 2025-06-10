@@ -47,9 +47,11 @@ Use your favorite plugin manager to install this plugin. For example, using lazy
 
 ## LSP Integration
 Scala paragraphs will automatically start the default Scala language server
-(Metals) if no LSP client is currently attached to the buffer. Ensure that
-`nvim-lspconfig` is configured for `metals` so that code completion and other LSP
-features work as expected.
+(Metals) if no LSP client is currently attached to the buffer. GitHub Copilot is
+also attached automatically when available. Ensure that `nvim-lspconfig` is
+configured for `metals` so that code completion and other LSP features work as
+expected.
+
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

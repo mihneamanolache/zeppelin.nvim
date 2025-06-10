@@ -50,24 +50,22 @@ local function render_paragraph(bufnr, paragraphs, index)
     local ft = detect_interpreter(code_text)
     vim.api.nvim_buf_set_option(bufnr, "filetype", ft)
     vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-    if ft == "scala" and #vim.lsp.get_active_clients({bufnr = bufnr}) == 0 then
-        local ok, _ = pcall(vim.cmd, "LspStart")
-        if not ok then
-            vim.notify("Failed to start Scala LSP server", vim.log.levels.WARN)
-        end
+
+    local get_clients = vim.lsp.get_clients or vim.lsp.get_active_clients
+    if ft == "scala" and #get_clients({ name = "metals", bufnr = bufnr }) == 0 then
+        pcall(vim.cmd, "LspStart metals")
     end
-    local clients = vim.lsp.buf_get_clients(bufnr)
-    if #clients > 0 then
-        for _, client in ipairs(clients) do
-            if not vim.lsp.buf_is_attached(bufnr, client.id) then
-                local success = vim.lsp.buf_attach_client(bufnr, client.id)
-                if not success then
-                    vim.notify("Failed to attach LSP client to buffer!", vim.log.levels.WARN)
-                end
+    if #get_clients({ name = "copilot", bufnr = bufnr }) == 0 then
+        pcall(vim.cmd, "Copilot attach")
+    end
+
+    for _, client in pairs(get_clients()) do
+        if not vim.lsp.buf_is_attached(bufnr, client.id) then
+            local ok = pcall(vim.lsp.buf_attach_client, bufnr, client.id)
+            if not ok then
+                vim.notify("Failed to attach LSP client to buffer!", vim.log.levels.WARN)
             end
         end
-    else
-        vim.notify("No active LSP clients for this buffer.", vim.log.levels.INFO)
     end
     vim.api.nvim_buf_set_var(bufnr, "zeppelin_paragraph_index", index)
 end
