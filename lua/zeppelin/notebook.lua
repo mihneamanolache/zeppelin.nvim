@@ -267,6 +267,7 @@ function M.open_notebook_slideshow(notebook_json)
     vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
     vim.api.nvim_buf_set_option(buf, "modifiable", true)
     vim.api.nvim_buf_set_option(buf, "readonly", false)
+    vim.api.nvim_buf_set_option(buf, "buftype", "acwrite")
 
     vim.api.nvim_buf_set_var(buf, "zeppelin_paragraphs", paragraphs)
     vim.api.nvim_buf_set_var(buf, "zeppelin_paragraph_index", 1)
@@ -297,13 +298,13 @@ function M.open_notebook_slideshow(notebook_json)
         { nowait = true, noremap = true, silent = true }
     )
 
-    vim.api.nvim_buf_set_keymap(
-        buf,
-        "n",
-        "<leader>w",
-        "<cmd>lua require('zeppelin.notebook').save_current_paragraph()<CR>",
-        { nowait = true, noremap = true, silent = true }
-    )
+
+    vim.api.nvim_create_autocmd("BufWriteCmd", {
+        buffer = buf,
+        callback = function()
+            require('zeppelin.notebook').save_current_paragraph()
+        end,
+    })
 
     vim.api.nvim_set_current_buf(buf)
 end
