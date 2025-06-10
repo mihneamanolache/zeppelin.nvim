@@ -250,6 +250,70 @@ function M.run_current_paragraph()
 end
 
 --------------------------------------------------------------------------------
+-- Create a new empty paragraph after the current one
+--------------------------------------------------------------------------------
+function M.new_paragraph()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local ok1, paragraphs = pcall(vim.api.nvim_buf_get_var, bufnr, "zeppelin_paragraphs")
+    local ok2, idx = pcall(vim.api.nvim_buf_get_var, bufnr, "zeppelin_paragraph_index")
+    local ok3, notebookId = pcall(vim.api.nvim_buf_get_var, bufnr, "zeppelin_notebook_id")
+    if not (ok1 and ok2 and ok3) then
+        ui.show_popup("Cannot add paragraph: missing data!", { width = 60, height = 5 })
+        return
+    end
+
+    local createUrl = string.format("%s/api/notebook/%s/paragraph", config.options.ZEPPELIN_URL, notebookId)
+    local payload = vim.fn.json_encode({ title = "", text = "", index = idx })
+
+    local args = {
+        "-X", "POST",
+        "-b", M.COOKIE_FILE,
+        "-H", "Content-Type: application/json",
+        "--data-binary", payload,
+        createUrl,
+    }
+    if config.options.SOCKS5_PROXY and config.options.SOCKS5_PROXY ~= "" then
+        table.insert(args, 1, config.options.SOCKS5_PROXY)
+        table.insert(args, 1, "--socks5-hostname")
+    end
+
+    Job:new({
+        command = "curl",
+        args = args,
+        on_exit = function(job, return_val)
+            vim.schedule(function()
+                if return_val ~= 0 then
+                    local stdout_str = table.concat(job:result(), "\n")
+                    local stderr_str = table.concat(job:stderr_result(), "\n")
+                    ui.show_popup(
+                        "Failed to add paragraph (curl error).\n" ..
+                        "Return code: " .. return_val .. "\n\n" ..
+                        "STDOUT:\n" .. stdout_str .. "\n\n" ..
+                        "STDERR:\n" .. stderr_str,
+                        { width = 80, height = 20 }
+                    )
+                    return
+                end
+
+                local response = table.concat(job:result(), "\n")
+                local data = decode_json(response)
+                if not data or data.status ~= "OK" or not data.body then
+                    ui.show_popup("Failed to add paragraph!\n\n" .. response, { width = 80, height = 10 })
+                    return
+                end
+
+                local new_paragraph = { id = data.body, text = "" }
+                table.insert(paragraphs, idx + 1, new_paragraph)
+                vim.api.nvim_buf_set_var(bufnr, "zeppelin_paragraphs", paragraphs)
+                render_paragraph(bufnr, paragraphs, idx + 1)
+
+                ui.show_popup("Paragraph added successfully!", { width = 40, height = 5 })
+            end)
+        end,
+    }):start()
+end
+
+--------------------------------------------------------------------------------
 -- Create a slideshow buffer
 --------------------------------------------------------------------------------
 function M.open_notebook_slideshow(notebook_json)
@@ -298,6 +362,14 @@ function M.open_notebook_slideshow(notebook_json)
         { nowait = true, noremap = true, silent = true }
     )
 
+    vim.api.nvim_buf_set_keymap(
+        buf,
+        "n",
+        "<leader>n",
+        "<cmd>ZeppelinNewParagraph<CR>",
+        { nowait = true, noremap = true, silent = true }
+    )
+
 
     vim.api.nvim_create_autocmd("BufWriteCmd", {
         buffer = buf,
@@ -314,6 +386,10 @@ end
 --------------------------------------------------------------------------------
 vim.api.nvim_create_user_command("ZeppelinRun", function()
     M.run_current_paragraph()
+end, {})
+
+vim.api.nvim_create_user_command("ZeppelinNewParagraph", function()
+    M.new_paragraph()
 end, {})
 
 return M

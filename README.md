@@ -15,7 +15,7 @@ I created this plugin because I refused to use IntelliJ and I used to use Apache
 - [ ] Create new notebook
 - [ ] Delete notebook
 - [ ] Restart interpreter
-- [ ] Create new paragraph
+- [x] Create new paragraph
 - [ ] Delete paragraph
 - [ ] Search in all notebooks
 
@@ -40,6 +40,7 @@ Use your favorite plugin manager to install this plugin. For example, using lazy
 - Navigating paragraphs: use `<leader><Right>` and `<leader><Left>` to navigate between paragraphs.
 - Saving changes: use `:w` to save changes in a paragraph.
 - Running code: use `<leader>r` to run code in a paragraph.
+- Adding a new paragraph: use `<leader>n`.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
