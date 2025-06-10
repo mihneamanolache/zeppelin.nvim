@@ -38,7 +38,7 @@ Use your favorite plugin manager to install this plugin. For example, using lazy
 - List notebooks: `:Zeppelin` - This will open a buffer showing all available notebooks. Press `<CR>` on a notebook to open it.
 - Filter notebooks: press `f` in the notebooks buffer and type the notebook name to filter notebooks.
 - Navigating paragraphs: use `<leader><Right>` and `<leader><Left>` to navigate between paragraphs.
-- Saving changes: use `<leader>w` to save changes in a paragraph.
+- Saving changes: use `:w` to save changes in a paragraph.
 - Running code: use `<leader>r` to run code in a paragraph.
 
 ## License
