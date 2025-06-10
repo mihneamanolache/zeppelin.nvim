@@ -170,6 +170,10 @@ function M.save_current_paragraph()
                     return
                 end
 
+                -- Update local cache with new code so navigating away
+                -- and back doesn't restore the old text.
+                paragraphs[idx].text = new_code
+
                 ui.show_popup("Paragraph saved successfully!", { width = 40, height = 5 })
             end)
         end,
