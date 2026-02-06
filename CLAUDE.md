@@ -30,7 +30,7 @@ All source code lives under `lua/`:
 - **`lua/zeppelin/config.lua`** — Stores plugin configuration. Only `ZEPPELIN_URL` is required; `SOCKS5_PROXY` defaults to `""`.
 - **`lua/zeppelin/auth.lua`** — Authenticates via `api.authenticate()`, auto-opens tree sidebar on success.
 - **`lua/zeppelin/tree.lua`** — Tree sidebar (left vsplit, width 35). Parses flat notebook list into nested folder hierarchy. Supports expand/collapse, create notebook, refresh.
-- **`lua/zeppelin/notebook.lua`** — Unified paragraph buffer. All paragraphs in one buffer with extmark-tracked boundaries, virtual line separators, inline output via `virt_lines`. Handles save, run, restart interpreter, output toggle.
+- **`lua/zeppelin/notebook.lua`** — Unified paragraph buffer. All paragraphs in one buffer with extmark-tracked boundaries, virtual line separators, inline output as real buffer lines (copyable). Status badges, auto-save on run, paragraph navigation. Handles save, run, restart interpreter, output toggle.
 - **`lua/zeppelin/search.lua`** — Telescope integration for fuzzy notebook search by path.
 - **`lua/zeppelin/ui.lua`** — Simple auto-closing popup notifications. Defines all `Zeppelin*` highlight groups.
 
@@ -50,11 +50,14 @@ All source code lives under `lua/`:
 
 | Key | Action |
 |-----|--------|
-| `<leader>r` | Run paragraph under cursor |
+| `<leader>r` | Run paragraph under cursor (auto-saves first) |
 | `<leader>w` | Save current paragraph |
 | `<leader>W` | Save all modified paragraphs |
 | `<leader>o` | Toggle output visibility |
-| `<leader>R` | Restart interpreter |
+| `<leader>R` | Restart interpreter for current paragraph |
+| `<leader>a` | Create new paragraph after current |
+| `<S-Down>` | Jump to next paragraph |
+| `<S-Up>` | Jump to previous paragraph |
 
 ### Tree Keymaps
 
