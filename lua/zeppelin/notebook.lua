@@ -145,7 +145,7 @@ local function build_output_lines(output_data)
     for _, item in ipairs(output_data.msg) do
       if item.data then
         for _, text_line in ipairs(vim.split(item.data, "\n", { plain = true })) do
-          table.insert(lines, strip_ansi(text_line))
+          table.insert(lines, (strip_ansi(text_line)))
         end
       end
     end
