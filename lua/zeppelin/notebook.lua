@@ -28,6 +28,17 @@ local interpreter_map = {
   ["%%spark"]    = "scala",
 }
 
+-- Maps paragraph directive to Zeppelin interpreter setting name (for restart)
+local interpreter_setting_map = {
+  ["%%pyspark"]  = "spark",
+  ["%%python"]   = "python",
+  ["%%sql"]      = "spark",
+  ["%%sh"]       = "sh",
+  ["%%md"]       = "md",
+  ["%%angular"]  = "angular",
+  ["%%spark"]    = "spark",
+}
+
 local status_hl_map = {
   READY    = "ZeppelinStatusReady",
   PENDING  = "ZeppelinStatusPending",
@@ -649,7 +660,23 @@ end
 -- Restart interpreter
 --------------------------------------------------------------------------------
 
---- Restart the interpreter for the current notebook.
+--- Detect the Zeppelin interpreter setting name from paragraph text.
+---@param text string
+---@return string setting_name
+local function detect_interpreter_setting(text)
+  local first_line = text:match("^([^\n]*)")
+  if first_line then
+    first_line = vim.trim(first_line)
+    for prefix, setting in pairs(interpreter_setting_map) do
+      if first_line:match("^" .. vim.pesc(prefix)) then
+        return setting
+      end
+    end
+  end
+  return "spark"
+end
+
+--- Restart the interpreter for the paragraph under the cursor.
 function M.restart_interpreter()
   local bufnr = vim.api.nvim_get_current_buf()
   local state = _buffers[bufnr]
@@ -658,40 +685,20 @@ function M.restart_interpreter()
     return
   end
 
-  -- First get interpreter settings to find the interpreter ID
-  api.get("/api/interpreter/setting", function(err, data)
+  local para = M.get_paragraph_at_cursor(bufnr)
+  local setting_name = "spark"
+  if para then
+    local text = get_paragraph_text(bufnr, para)
+    setting_name = detect_interpreter_setting(text)
+  end
+
+  local path = string.format("/api/interpreter/setting/restart/%s", setting_name)
+  api.put(path, { noteId = state.notebook_id }, function(err)
     if err then
-      ui.show_popup("Failed to get interpreter settings: " .. err)
+      ui.show_popup("Failed to restart interpreter: " .. err)
       return
     end
-
-    if not data or type(data) ~= "table" then
-      ui.show_popup("No interpreter settings found!")
-      return
-    end
-
-    -- Find the first interpreter and restart it
-    local interpreter_id = nil
-    for _, setting in ipairs(data) do
-      if setting.id then
-        interpreter_id = setting.id
-        break
-      end
-    end
-
-    if not interpreter_id then
-      ui.show_popup("No interpreter found to restart!")
-      return
-    end
-
-    local path = string.format("/api/interpreter/setting/restart/%s", interpreter_id)
-    api.put(path, { noteId = state.notebook_id }, function(restart_err)
-      if restart_err then
-        ui.show_popup("Failed to restart interpreter: " .. restart_err)
-        return
-      end
-      ui.show_popup("Interpreter restarted!")
-    end)
+    ui.show_popup("Interpreter '" .. setting_name .. "' restarted!")
   end)
 end
 
