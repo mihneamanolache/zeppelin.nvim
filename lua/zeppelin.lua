@@ -16,10 +16,9 @@ vim.api.nvim_create_user_command("ZeppelinLogin", function(opts)
   end
   vim.ui.input({ prompt = "Username: " }, function(username)
     if not username or username == "" then return end
-    vim.ui.input({ prompt = "Password: " }, function(password)
-      if not password or password == "" then return end
-      require("zeppelin.auth").authenticate(username, password)
-    end)
+    local password = vim.fn.inputsecret("Password: ")
+    if not password or password == "" then return end
+    require("zeppelin.auth").authenticate(username, password)
   end)
 end, { nargs = "*" })
 

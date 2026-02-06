@@ -342,6 +342,16 @@ local function find_edit_window()
   return cur_win
 end
 
+--- Close any floating windows (dashboard overlays, popups, etc.)
+local function dismiss_floating_wins()
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local cfg = vim.api.nvim_win_get_config(win)
+    if cfg.relative and cfg.relative ~= "" then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+end
+
 --- Open a notebook from its JSON data. Creates or switches to the buffer.
 ---@param notebook_json table
 function M.open_notebook(notebook_json)
@@ -350,6 +360,8 @@ function M.open_notebook(notebook_json)
     ui.show_popup("No paragraphs in notebook!")
     return
   end
+
+  dismiss_floating_wins()
 
   local notebook_id = notebook_json.id or "unknown"
   local buf_name = "zeppelin://" .. notebook_id
