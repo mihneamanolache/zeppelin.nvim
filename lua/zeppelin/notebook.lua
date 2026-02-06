@@ -92,6 +92,13 @@ end
 -- Output display (inline via virt_lines)
 --------------------------------------------------------------------------------
 
+--- Strip ANSI escape sequences from a string.
+---@param s string
+---@return string
+local function strip_ansi(s)
+  return s:gsub("\27%[[%d;]*[A-Za-z]", "")
+end
+
 --- Build virtual lines from Zeppelin output msg array.
 ---@param output_data table Zeppelin response body with msg array
 ---@return table[] virt_lines
@@ -106,7 +113,7 @@ local function build_output_virt_lines(output_data)
     for _, item in ipairs(output_data.msg) do
       if item.data then
         for _, text_line in ipairs(vim.split(item.data, "\n", { plain = true })) do
-          table.insert(virt_lines, { { text_line, hl } })
+          table.insert(virt_lines, { { strip_ansi(text_line), hl } })
         end
       end
     end

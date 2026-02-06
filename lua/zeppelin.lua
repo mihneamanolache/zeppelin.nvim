@@ -14,12 +14,7 @@ vim.api.nvim_create_user_command("ZeppelinLogin", function(opts)
     require("zeppelin.auth").authenticate(args[1], args[2])
     return
   end
-  vim.ui.input({ prompt = "Username: " }, function(username)
-    if not username or username == "" then return end
-    local password = vim.fn.inputsecret("Password: ")
-    if not password or password == "" then return end
-    require("zeppelin.auth").authenticate(username, password)
-  end)
+  require("zeppelin.auth").login_or_reuse()
 end, { nargs = "*" })
 
 -- :Zeppelin / :ZeppelinTree — toggle tree sidebar
