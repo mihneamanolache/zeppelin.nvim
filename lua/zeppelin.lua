@@ -7,14 +7,20 @@ M.setup = function(opts)
   ui.setup_highlights()
 end
 
--- :ZeppelinLogin <username> <password>
+-- :ZeppelinLogin [username] [password]
 vim.api.nvim_create_user_command("ZeppelinLogin", function(opts)
-  local args = vim.split(opts.args, " ")
-  if #args < 2 then
-    ui.show_popup("Usage: :ZeppelinLogin <username> <password>")
+  local args = vim.split(opts.args, " ", { trimempty = true })
+  if #args >= 2 then
+    require("zeppelin.auth").authenticate(args[1], args[2])
     return
   end
-  require("zeppelin.auth").authenticate(args[1], args[2])
+  vim.ui.input({ prompt = "Username: " }, function(username)
+    if not username or username == "" then return end
+    vim.ui.input({ prompt = "Password: " }, function(password)
+      if not password or password == "" then return end
+      require("zeppelin.auth").authenticate(username, password)
+    end)
+  end)
 end, { nargs = "*" })
 
 -- :Zeppelin / :ZeppelinTree — toggle tree sidebar

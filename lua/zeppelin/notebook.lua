@@ -307,30 +307,39 @@ function M.fetch_and_open(notebook_id)
   end)
 end
 
---- Find or create a suitable editing window (not a special/tree sidebar).
+--- Find a suitable editing window (not the tree sidebar).
+--- Prefers a normal buffer window, but will reuse dashboard/empty windows
+--- rather than creating splits.
 ---@return number win_id
 local function find_edit_window()
   local cur_win = vim.api.nvim_get_current_win()
-  -- Try to find an existing normal window
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+  local all_wins = vim.api.nvim_tabpage_list_wins(0)
+
+  -- First pass: find an existing normal editing window (not tree, not current)
+  for _, win in ipairs(all_wins) do
     if win ~= cur_win then
-      local buf = vim.api.nvim_win_get_buf(win)
-      local bt = vim.bo[buf].buftype
-      local ft = vim.bo[buf].filetype
-      -- Skip special buffers (tree, nofile sidebars, etc.)
-      if bt ~= "nofile" and ft ~= "zeppelin_tree" then
+      local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+      if ft ~= "zeppelin_tree" then
         return win
       end
     end
   end
-  -- Check if current window itself is suitable
-  local cur_buf = vim.api.nvim_win_get_buf(cur_win)
-  if vim.bo[cur_buf].filetype ~= "zeppelin_tree" and vim.bo[cur_buf].buftype ~= "nofile" then
+
+  -- Second pass: use current window if it's not the tree
+  local cur_ft = vim.bo[vim.api.nvim_win_get_buf(cur_win)].filetype
+  if cur_ft ~= "zeppelin_tree" then
     return cur_win
   end
-  -- No suitable window found — create a new split to the right
-  vim.cmd("rightbelow vsplit")
-  return vim.api.nvim_get_current_win()
+
+  -- Last resort: pick any non-tree window
+  for _, win in ipairs(all_wins) do
+    local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+    if ft ~= "zeppelin_tree" then
+      return win
+    end
+  end
+
+  return cur_win
 end
 
 --- Open a notebook from its JSON data. Creates or switches to the buffer.
