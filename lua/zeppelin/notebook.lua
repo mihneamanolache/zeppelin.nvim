@@ -516,10 +516,6 @@ function M.open_notebook(notebook_json)
 
   M.render_notebook(buf, paragraphs, notebook_id)
 
-  -- Set filetype based on dominant interpreter
-  local ft = detect_dominant_filetype(paragraphs)
-  vim.bo[buf].filetype = ft
-
   -- Keymaps
   local kopts = { nowait = true, noremap = true, silent = true }
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>r",
@@ -555,6 +551,23 @@ function M.open_notebook(notebook_json)
   local win = find_edit_window()
   vim.api.nvim_set_current_win(win)
   vim.api.nvim_win_set_buf(win, buf)
+
+  -- Set filetype after buffer is in a window to trigger LSP/Copilot autocmds
+  local ft = detect_dominant_filetype(paragraphs)
+  vim.bo[buf].filetype = ft
+
+  -- Attach any running LSP clients that support this filetype
+  for _, client in ipairs(vim.lsp.get_clients()) do
+    if not vim.lsp.buf_is_attached(buf, client.id) then
+      local filetypes = client.config.filetypes or {}
+      for _, supported_ft in ipairs(filetypes) do
+        if supported_ft == ft then
+          pcall(vim.lsp.buf_attach_client, buf, client.id)
+          break
+        end
+      end
+    end
+  end
 end
 
 --------------------------------------------------------------------------------
