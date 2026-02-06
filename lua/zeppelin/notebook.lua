@@ -292,6 +292,36 @@ function M.get_paragraph_at_cursor(bufnr)
   return nil, nil
 end
 
+--- Jump to the next paragraph.
+function M.jump_next_paragraph()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local _, idx = M.get_paragraph_at_cursor(bufnr)
+  local state = _buffers[bufnr]
+  if not state then return end
+
+  local target = (idx and idx < #state.paragraphs) and (idx + 1) or 1
+  local para = state.paragraphs[target]
+  local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.start_extmark, {})
+  if pos and #pos > 0 then
+    vim.api.nvim_win_set_cursor(0, { pos[1] + 1, 0 })
+  end
+end
+
+--- Jump to the previous paragraph.
+function M.jump_prev_paragraph()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local _, idx = M.get_paragraph_at_cursor(bufnr)
+  local state = _buffers[bufnr]
+  if not state then return end
+
+  local target = (idx and idx > 1) and (idx - 1) or #state.paragraphs
+  local para = state.paragraphs[target]
+  local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.start_extmark, {})
+  if pos and #pos > 0 then
+    vim.api.nvim_win_set_cursor(0, { pos[1] + 1, 0 })
+  end
+end
+
 --------------------------------------------------------------------------------
 -- Buffer rendering
 --------------------------------------------------------------------------------
@@ -495,6 +525,10 @@ function M.open_notebook(notebook_json)
     "<cmd>lua require('zeppelin.notebook').restart_interpreter()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>a",
     "<cmd>lua require('zeppelin.notebook').create_paragraph()<CR>", kopts)
+  vim.api.nvim_buf_set_keymap(buf, "n", "<S-Down>",
+    "<cmd>lua require('zeppelin.notebook').jump_next_paragraph()<CR>", kopts)
+  vim.api.nvim_buf_set_keymap(buf, "n", "<S-Up>",
+    "<cmd>lua require('zeppelin.notebook').jump_prev_paragraph()<CR>", kopts)
 
   -- BufWriteCmd autocmd for :w support
   vim.api.nvim_create_autocmd("BufWriteCmd", {
