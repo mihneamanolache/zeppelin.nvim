@@ -56,4 +56,9 @@ vim.api.nvim_create_user_command("ZeppelinRestartInterpreter", function()
   require("zeppelin.notebook").restart_interpreter()
 end, {})
 
+-- :ZeppelinNewParagraph — create new paragraph after cursor
+vim.api.nvim_create_user_command("ZeppelinNewParagraph", function()
+  require("zeppelin.notebook").create_paragraph()
+end, {})
+
 return M

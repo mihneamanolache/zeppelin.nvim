@@ -62,7 +62,12 @@ function M.request(method, path, body, callback)
   local encoded_body = nil
   if body ~= nil then
     if type(body) == "table" then
-      encoded_body = vim.fn.json_encode(body)
+      -- vim.fn.json_encode({}) produces "[]"; Zeppelin expects "{}"
+      if next(body) == nil then
+        encoded_body = "{}"
+      else
+        encoded_body = vim.fn.json_encode(body)
+      end
     else
       encoded_body = tostring(body)
     end

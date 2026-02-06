@@ -400,6 +400,8 @@ function M.open_notebook(notebook_json)
     "<cmd>lua require('zeppelin.notebook').toggle_output_at_cursor()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>R",
     "<cmd>lua require('zeppelin.notebook').restart_interpreter()<CR>", kopts)
+  vim.api.nvim_buf_set_keymap(buf, "n", "<leader>a",
+    "<cmd>lua require('zeppelin.notebook').create_paragraph()<CR>", kopts)
 
   -- BufWriteCmd autocmd for :w support
   vim.api.nvim_create_autocmd("BufWriteCmd", {
@@ -595,6 +597,44 @@ function M.restart_interpreter()
         return
       end
       ui.show_popup("Interpreter restarted!")
+    end)
+  end)
+end
+
+--------------------------------------------------------------------------------
+-- Create new paragraph
+--------------------------------------------------------------------------------
+
+--- Create a new empty paragraph after the one under the cursor.
+function M.create_paragraph()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local state = _buffers[bufnr]
+  if not state then
+    ui.show_popup("Not a Zeppelin notebook buffer!")
+    return
+  end
+
+  local _, idx = M.get_paragraph_at_cursor(bufnr)
+  local insert_index = idx and idx or #state.paragraphs
+
+  local path = string.format("/api/notebook/%s/paragraph", state.notebook_id)
+  api.post(path, { title = "", text = "", index = insert_index }, function(err)
+    if err then
+      ui.show_popup("Failed to create paragraph: " .. err)
+      return
+    end
+    -- Re-fetch and re-render the notebook in place
+    api.get("/api/notebook/" .. state.notebook_id, function(fetch_err, data)
+      if fetch_err then
+        ui.show_popup("Failed to refresh notebook: " .. fetch_err)
+        return
+      end
+      local paragraphs = (data and data.paragraphs) or {}
+      if #paragraphs == 0 then
+        return
+      end
+      M.render_notebook(bufnr, paragraphs, state.notebook_id)
+      ui.show_popup("New paragraph created!")
     end)
   end)
 end
