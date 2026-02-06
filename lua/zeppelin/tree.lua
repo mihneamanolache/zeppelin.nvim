@@ -189,6 +189,7 @@ function M.on_enter()
     end
     render()
   elseif node.notebook_id then
+    M.close()
     notebook.fetch_and_open(node.notebook_id)
   end
 end

@@ -307,6 +307,32 @@ function M.fetch_and_open(notebook_id)
   end)
 end
 
+--- Find or create a suitable editing window (not a special/tree sidebar).
+---@return number win_id
+local function find_edit_window()
+  local cur_win = vim.api.nvim_get_current_win()
+  -- Try to find an existing normal window
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if win ~= cur_win then
+      local buf = vim.api.nvim_win_get_buf(win)
+      local bt = vim.bo[buf].buftype
+      local ft = vim.bo[buf].filetype
+      -- Skip special buffers (tree, nofile sidebars, etc.)
+      if bt ~= "nofile" and ft ~= "zeppelin_tree" then
+        return win
+      end
+    end
+  end
+  -- Check if current window itself is suitable
+  local cur_buf = vim.api.nvim_win_get_buf(cur_win)
+  if vim.bo[cur_buf].filetype ~= "zeppelin_tree" and vim.bo[cur_buf].buftype ~= "nofile" then
+    return cur_win
+  end
+  -- No suitable window found — create a new split to the right
+  vim.cmd("rightbelow vsplit")
+  return vim.api.nvim_get_current_win()
+end
+
 --- Open a notebook from its JSON data. Creates or switches to the buffer.
 ---@param notebook_json table
 function M.open_notebook(notebook_json)
@@ -322,7 +348,9 @@ function M.open_notebook(notebook_json)
   -- Check if buffer already exists
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == buf_name then
-      vim.api.nvim_set_current_buf(b)
+      local win = find_edit_window()
+      vim.api.nvim_set_current_win(win)
+      vim.api.nvim_win_set_buf(win, b)
       return
     end
   end
@@ -361,7 +389,9 @@ function M.open_notebook(notebook_json)
     end,
   })
 
-  vim.api.nvim_set_current_buf(buf)
+  local win = find_edit_window()
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_buf(win, buf)
 end
 
 --------------------------------------------------------------------------------
