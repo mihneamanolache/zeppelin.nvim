@@ -479,14 +479,23 @@ end
 ---@param notebook_json table
 function M.open_notebook(notebook_json)
   local paragraphs = notebook_json.paragraphs or {}
+  local notebook_id = notebook_json.id or "unknown"
+
+  -- Auto-create a first paragraph for empty notebooks
   if #paragraphs == 0 then
-    ui.show_popup("No paragraphs in notebook!")
+    local path = string.format("/api/notebook/%s/paragraph", notebook_id)
+    api.post(path, { title = "", text = "", index = 0 }, function(err)
+      if err then
+        ui.show_popup("Failed to create initial paragraph: " .. err)
+        return
+      end
+      M.fetch_and_open(notebook_id)
+    end)
     return
   end
 
   dismiss_floating_wins()
 
-  local notebook_id = notebook_json.id or "unknown"
   local buf_name = "zeppelin://" .. notebook_id
 
   -- Check if buffer already exists
