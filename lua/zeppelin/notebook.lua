@@ -534,6 +534,8 @@ function M.open_notebook(notebook_json)
     "<cmd>lua require('zeppelin.notebook').restart_interpreter()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>a",
     "<cmd>lua require('zeppelin.notebook').create_paragraph()<CR>", kopts)
+  vim.api.nvim_buf_set_keymap(buf, "n", "<leader>d",
+    "<cmd>lua require('zeppelin.notebook').delete_paragraph()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>y",
     "<cmd>lua require('zeppelin.notebook').yank_paragraph()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<S-Down>",
@@ -653,6 +655,48 @@ function M.yank_paragraph()
   local text = get_paragraph_text(bufnr, para)
   vim.fn.setreg("+", text)
   ui.show_popup("Paragraph yanked!")
+end
+
+--- Delete the paragraph under the cursor.
+function M.delete_paragraph()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local state = _buffers[bufnr]
+  if not state then
+    ui.show_popup("Not a Zeppelin notebook buffer!")
+    return
+  end
+
+  local para = M.get_paragraph_at_cursor(bufnr)
+  if not para then
+    ui.show_popup("No paragraph found at cursor position!")
+    return
+  end
+
+  if #state.paragraphs <= 1 then
+    ui.show_popup("Cannot delete the last paragraph!")
+    return
+  end
+
+  local path = string.format("/api/notebook/%s/paragraph/%s", state.notebook_id, para.id)
+  api.delete(path, function(err)
+    if err then
+      ui.show_popup("Failed to delete paragraph: " .. err)
+      return
+    end
+    -- Re-fetch and re-render
+    api.get("/api/notebook/" .. state.notebook_id, function(fetch_err, data)
+      if fetch_err then
+        ui.show_popup("Failed to refresh notebook: " .. fetch_err)
+        return
+      end
+      local paragraphs = (data and data.paragraphs) or {}
+      if #paragraphs == 0 then
+        return
+      end
+      M.render_notebook(bufnr, paragraphs, state.notebook_id)
+      ui.show_popup("Paragraph deleted!")
+    end)
+  end)
 end
 
 --------------------------------------------------------------------------------
