@@ -5,6 +5,8 @@ local ui = require("zeppelin.ui")
 M.setup = function(opts)
   config.setup(opts)
   ui.setup_highlights()
+
+  vim.keymap.set("n", "<leader>z", "<cmd>Zeppelin<CR>", { silent = true, desc = "Toggle Zeppelin tree" })
 end
 
 -- :ZeppelinLogin [username] [password]
