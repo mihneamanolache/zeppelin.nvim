@@ -292,6 +292,19 @@ function M.get_paragraph_at_cursor(bufnr)
   return nil, nil
 end
 
+--- Yank the current paragraph text to the system clipboard.
+function M.yank_paragraph()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local para = M.get_paragraph_at_cursor(bufnr)
+  if not para then
+    ui.show_popup("No paragraph found at cursor position!")
+    return
+  end
+  local text = get_paragraph_text(bufnr, para)
+  vim.fn.setreg("+", text)
+  ui.show_popup("Paragraph yanked!")
+end
+
 --- Jump to the next paragraph.
 function M.jump_next_paragraph()
   local bufnr = vim.api.nvim_get_current_buf()
@@ -525,6 +538,8 @@ function M.open_notebook(notebook_json)
     "<cmd>lua require('zeppelin.notebook').restart_interpreter()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<leader>a",
     "<cmd>lua require('zeppelin.notebook').create_paragraph()<CR>", kopts)
+  vim.api.nvim_buf_set_keymap(buf, "n", "<leader>y",
+    "<cmd>lua require('zeppelin.notebook').yank_paragraph()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<S-Down>",
     "<cmd>lua require('zeppelin.notebook').jump_next_paragraph()<CR>", kopts)
   vim.api.nvim_buf_set_keymap(buf, "n", "<S-Up>",
