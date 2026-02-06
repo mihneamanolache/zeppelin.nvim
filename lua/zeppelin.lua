@@ -1,49 +1,54 @@
--- lua/zeppelin.lua
 local M = {}
-local auth = require("zeppelin.auth")
-local ui = require("zeppelin.ui")
-local notebooks = require("zeppelin.notebooks")
-local interpreter = require("zeppelin.interpreter")
 local config = require("zeppelin.config")
+local ui = require("zeppelin.ui")
 
- -- Load configuration globally
 M.setup = function(opts)
   config.setup(opts)
+  ui.setup_highlights()
 end
 
--- Add :ZeppelinLogin command to authenticate
+-- :ZeppelinLogin <username> <password>
 vim.api.nvim_create_user_command("ZeppelinLogin", function(opts)
   local args = vim.split(opts.args, " ")
   if #args < 2 then
     ui.show_popup("Usage: :ZeppelinLogin <username> <password>")
     return
   end
-  auth.authenticate(args[1], args[2])
+  require("zeppelin.auth").authenticate(args[1], args[2])
 end, { nargs = "*" })
 
--- Add :Zeppelin command to fetch and display all notebooks
+-- :Zeppelin / :ZeppelinTree — toggle tree sidebar
 vim.api.nvim_create_user_command("Zeppelin", function()
-  notebooks.fetch_notebooks()
+  require("zeppelin.tree").toggle()
 end, {})
 
--- Restart interpreter
-vim.api.nvim_create_user_command("ZeppelinRestartInterpreter", function(opts)
-  local args = vim.split(opts.args, " ")
-  if #args < 1 then
-    ui.show_popup("Usage: :ZeppelinRestartInterpreter <settingId> [noteId]")
-    return
-  end
-  interpreter.restart(args[1], args[2])
-end, { nargs = "*" })
+vim.api.nvim_create_user_command("ZeppelinTree", function()
+  require("zeppelin.tree").toggle()
+end, {})
 
--- Stop interpreter
-vim.api.nvim_create_user_command("ZeppelinStopInterpreter", function(opts)
-  local args = vim.split(opts.args, " ")
-  if #args < 1 then
-    ui.show_popup("Usage: :ZeppelinStopInterpreter <settingId>")
-    return
-  end
-  interpreter.stop(args[1])
-end, { nargs = 1 })
+-- :ZeppelinSearch — Telescope notebook search
+vim.api.nvim_create_user_command("ZeppelinSearch", function()
+  require("zeppelin.search").search_notebooks()
+end, {})
+
+-- :ZeppelinRun — run paragraph under cursor
+vim.api.nvim_create_user_command("ZeppelinRun", function()
+  require("zeppelin.notebook").run_paragraph()
+end, {})
+
+-- :ZeppelinSave — save current paragraph
+vim.api.nvim_create_user_command("ZeppelinSave", function()
+  require("zeppelin.notebook").save_paragraph()
+end, {})
+
+-- :ZeppelinSaveAll — save all modified paragraphs
+vim.api.nvim_create_user_command("ZeppelinSaveAll", function()
+  require("zeppelin.notebook").save_all()
+end, {})
+
+-- :ZeppelinRestartInterpreter — restart interpreter for current notebook
+vim.api.nvim_create_user_command("ZeppelinRestartInterpreter", function()
+  require("zeppelin.notebook").restart_interpreter()
+end, {})
 
 return M
