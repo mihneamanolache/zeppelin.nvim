@@ -8,7 +8,7 @@ local ns = vim.api.nvim_create_namespace("zeppelin_paragraphs")
 --- _buffers[bufnr] = {
 ---   notebook_id = "...",
 ---   paragraphs = {
----     { id, original_text, start_extmark, end_extmark, output_extmark, interpreter, last_output },
+---     { id, original_text, start_extmark, end_extmark, output_start_extmark, output_end_extmark, status_extmark, interpreter, last_output },
 ---     ...
 ---   }
 --- }
@@ -26,6 +26,15 @@ local interpreter_map = {
   ["%%md"]       = "markdown",
   ["%%angular"]  = "html",
   ["%%spark"]    = "scala",
+}
+
+local status_hl_map = {
+  READY    = "ZeppelinStatusReady",
+  PENDING  = "ZeppelinStatusPending",
+  RUNNING  = "ZeppelinStatusRunning",
+  FINISHED = "ZeppelinStatusFinished",
+  ERROR    = "ZeppelinStatusError",
+  ABORT    = "ZeppelinStatusAbort",
 }
 
 --- Detect interpreter from the first line of paragraph text.
@@ -88,8 +97,31 @@ local function place_separator(bufnr, line)
   })
 end
 
+--- Place a right-aligned status badge on a paragraph's first line.
+---@param bufnr number
+---@param para table paragraph metadata
+---@param status string e.g. "READY", "RUNNING", "FINISHED", "ERROR"
+local function place_status_extmark(bufnr, para, status)
+  if para.status_extmark then
+    vim.api.nvim_buf_del_extmark(bufnr, ns, para.status_extmark)
+    para.status_extmark = nil
+  end
+
+  local start_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.start_extmark, {})
+  if not start_pos or #start_pos == 0 then
+    return
+  end
+
+  local hl = status_hl_map[status] or "ZeppelinStatusReady"
+  para.status = status
+  para.status_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, start_pos[1], 0, {
+    virt_text = { { " " .. status .. " ", hl } },
+    virt_text_pos = "right_align",
+  })
+end
+
 --------------------------------------------------------------------------------
--- Output display (inline via virt_lines)
+-- Output display
 --------------------------------------------------------------------------------
 
 --- Strip ANSI escape sequences from a string.
@@ -99,12 +131,12 @@ local function strip_ansi(s)
   return s:gsub("\27%[[%d;]*[A-Za-z]", "")
 end
 
---- Build virtual lines from Zeppelin output msg array.
+--- Build plain text lines from Zeppelin output msg array.
 ---@param output_data table Zeppelin response body with msg array
----@return table[] virt_lines
-local function build_output_virt_lines(output_data)
-  local virt_lines = {}
-  table.insert(virt_lines, { { "── Output ──", "ZeppelinOutputHeader" } })
+---@return string[] lines, string hl_group
+local function build_output_lines(output_data)
+  local lines = {}
+  table.insert(lines, "── Output ──")
 
   local code = output_data.code or "UNKNOWN"
   local hl = (code == "ERROR") and "ZeppelinOutputError" or "ZeppelinOutput"
@@ -113,71 +145,97 @@ local function build_output_virt_lines(output_data)
     for _, item in ipairs(output_data.msg) do
       if item.data then
         for _, text_line in ipairs(vim.split(item.data, "\n", { plain = true })) do
-          table.insert(virt_lines, { { strip_ansi(text_line), hl } })
+          table.insert(lines, strip_ansi(text_line))
         end
       end
     end
   else
-    table.insert(virt_lines, { { "(no output)", "ZeppelinOutput" } })
+    table.insert(lines, "(no output)")
   end
 
-  return virt_lines
+  return lines, hl
 end
 
---- Display output inline below a paragraph via extmarks.
+--- Remove output lines from the buffer for a paragraph.
+---@param bufnr number
+---@param para table
+local function remove_output_lines(bufnr, para)
+  if not para.output_start_extmark or not para.output_end_extmark then
+    return
+  end
+
+  local start_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.output_start_extmark, {})
+  local end_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.output_end_extmark, {})
+
+  if start_pos and end_pos and #start_pos > 0 and #end_pos > 0 then
+    vim.api.nvim_buf_set_lines(bufnr, start_pos[1], end_pos[1] + 1, false, {})
+  end
+
+  vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_start_extmark)
+  vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_end_extmark)
+  para.output_start_extmark = nil
+  para.output_end_extmark = nil
+end
+
+--- Insert output lines into the buffer after a paragraph and track with extmarks.
+---@param bufnr number
+---@param para table paragraph metadata entry
+---@param lines string[] lines to insert
+---@param header_hl string highlight for the header line
+---@param body_hl string highlight for body lines
+local function insert_output_lines(bufnr, para, lines, header_hl, body_hl)
+  local end_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.end_extmark, {})
+  if not end_pos or #end_pos == 0 then
+    return
+  end
+
+  local insert_at = end_pos[1] + 1
+  vim.api.nvim_buf_set_lines(bufnr, insert_at, insert_at, false, lines)
+
+  -- Place extmarks around the inserted lines
+  para.output_start_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, insert_at, 0, {
+    right_gravity = false,
+  })
+  para.output_end_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, insert_at + #lines - 1, 0, {
+    right_gravity = true,
+  })
+
+  -- Apply highlights
+  for j = 0, #lines - 1 do
+    local hl_group = (j == 0) and header_hl or body_hl
+    vim.api.nvim_buf_add_highlight(bufnr, ns, hl_group, insert_at + j, 0, -1)
+  end
+end
+
+--- Display output inline below a paragraph as real buffer lines.
 ---@param bufnr number
 ---@param para table paragraph metadata entry
 ---@param output_data table Zeppelin response body
 function M.display_output(bufnr, para, output_data)
-  -- Remove previous output extmark
-  if para.output_extmark then
-    vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_extmark)
-    para.output_extmark = nil
-  end
+  remove_output_lines(bufnr, para)
 
   para.last_output = output_data
+  para.output_visible = true
 
-  local virt_lines = build_output_virt_lines(output_data)
-
-  -- Place output after the paragraph's end extmark line
-  local end_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.end_extmark, {})
-  if not end_pos or #end_pos == 0 then
-    return
-  end
-
-  para.output_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, end_pos[1], 0, {
-    virt_lines = virt_lines,
-    virt_lines_above = false,
-  })
+  local lines, hl = build_output_lines(output_data)
+  insert_output_lines(bufnr, para, lines, "ZeppelinOutputHeader", hl)
 end
 
---- Show "Running..." indicator.
+--- Show "Running..." indicator as a real buffer line.
 ---@param bufnr number
 ---@param para table
 function M.show_running_indicator(bufnr, para)
-  if para.output_extmark then
-    vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_extmark)
-    para.output_extmark = nil
-  end
-
-  local end_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.end_extmark, {})
-  if not end_pos or #end_pos == 0 then
-    return
-  end
-
-  para.output_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, end_pos[1], 0, {
-    virt_lines = { { { "  Running...", "ZeppelinRunning" } } },
-    virt_lines_above = false,
-  })
+  remove_output_lines(bufnr, para)
+  insert_output_lines(bufnr, para, { "  Running..." }, "ZeppelinRunning", "ZeppelinRunning")
 end
 
 --- Toggle output visibility for a paragraph.
 ---@param bufnr number
 ---@param para table
 function M.toggle_output(bufnr, para)
-  if para.output_extmark then
-    vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_extmark)
-    para.output_extmark = nil
+  if para.output_start_extmark then
+    remove_output_lines(bufnr, para)
+    para.output_visible = false
   elseif para.last_output then
     M.display_output(bufnr, para, para.last_output)
   end
@@ -203,8 +261,19 @@ function M.get_paragraph_at_cursor(bufnr)
     local start_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.start_extmark, {})
     local end_pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.end_extmark, {})
     if start_pos and end_pos and #start_pos > 0 and #end_pos > 0 then
+      -- Check paragraph code lines
       if cursor_line >= start_pos[1] and cursor_line <= end_pos[1] then
         return para, i
+      end
+      -- Check output lines (cursor in output belongs to this paragraph)
+      if para.output_start_extmark and para.output_end_extmark then
+        local out_start = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.output_start_extmark, {})
+        local out_end = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, para.output_end_extmark, {})
+        if out_start and out_end and #out_start > 0 and #out_end > 0 then
+          if cursor_line >= out_start[1] and cursor_line <= out_end[1] then
+            return para, i
+          end
+        end
       end
     end
   end
@@ -248,7 +317,11 @@ function M.render_notebook(bufnr, paragraphs, notebook_id)
       end_line = end_line,
       start_extmark = nil,
       end_extmark = nil,
-      output_extmark = nil,
+      output_start_extmark = nil,
+      output_end_extmark = nil,
+      output_visible = false,
+      status_extmark = nil,
+      status = p.status or "READY",
       interpreter = detect_interpreter(text),
       last_output = nil,
     })
@@ -282,6 +355,8 @@ function M.render_notebook(bufnr, paragraphs, notebook_id)
     })
     meta.start_line = start_line
     meta.end_line = end_line
+
+    place_status_extmark(bufnr, meta, meta.status)
 
     -- Place separator after each paragraph except the last
     if i < #paragraphs then
@@ -530,20 +605,30 @@ function M.run_paragraph()
     return
   end
 
+  -- Auto-save before running (fire-and-forget)
+  local text = get_paragraph_text(bufnr, para)
+  local save_path = string.format("/api/notebook/%s/paragraph/%s", state.notebook_id, para.id)
+  api.put(save_path, { text = text }, function(save_err)
+    if not save_err then
+      para.original_text = text
+    end
+  end)
+
   M.show_running_indicator(bufnr, para)
+  place_status_extmark(bufnr, para, "RUNNING")
 
   local path = string.format("/api/notebook/run/%s/%s", state.notebook_id, para.id)
   api.post(path, {}, function(err, data)
     if err then
       ui.show_popup("Failed to run paragraph: " .. err)
+      place_status_extmark(bufnr, para, "ERROR")
       -- Clear running indicator
-      if para.output_extmark then
-        vim.api.nvim_buf_del_extmark(bufnr, ns, para.output_extmark)
-        para.output_extmark = nil
-      end
+      remove_output_lines(bufnr, para)
       return
     end
     if data then
+      local result_status = (data.code == "ERROR") and "ERROR" or "FINISHED"
+      place_status_extmark(bufnr, para, result_status)
       M.display_output(bufnr, para, data)
     end
   end)

@@ -61,6 +61,14 @@ function M.setup_highlights()
 
   -- Separator
   hl(0, "ZeppelinSeparator", { link = "NonText", default = true })
+
+  -- Status badges
+  hl(0, "ZeppelinStatusReady",    { link = "DiagnosticInfo",  default = true })
+  hl(0, "ZeppelinStatusPending",  { link = "Comment",         default = true })
+  hl(0, "ZeppelinStatusRunning",  { link = "DiagnosticWarn",  default = true })
+  hl(0, "ZeppelinStatusFinished", { link = "DiagnosticOk",    default = true })
+  hl(0, "ZeppelinStatusError",    { link = "DiagnosticError", default = true })
+  hl(0, "ZeppelinStatusAbort",    { link = "WarningMsg",      default = true })
 end
 
 return M
