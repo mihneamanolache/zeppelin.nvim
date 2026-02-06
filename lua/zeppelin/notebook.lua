@@ -653,6 +653,7 @@ function M.yank_paragraph()
     return
   end
   local text = get_paragraph_text(bufnr, para)
+  vim.fn.setreg('"', text)
   vim.fn.setreg("+", text)
   ui.show_popup("Paragraph yanked!")
 end
