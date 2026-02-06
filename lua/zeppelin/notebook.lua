@@ -543,7 +543,9 @@ function M.run_paragraph()
       end
       return
     end
-    M.display_output(bufnr, para, data)
+    if data then
+      M.display_output(bufnr, para, data)
+    end
   end)
 end
 
