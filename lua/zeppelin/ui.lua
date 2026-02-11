@@ -59,6 +59,9 @@ function M.setup_highlights()
   hl(0, "ZeppelinOutputError", { link = "ErrorMsg", default = true })
   hl(0, "ZeppelinRunning", { link = "WarningMsg", default = true })
 
+  -- Progress bar
+  hl(0, "ZeppelinProgressText", { link = "DiagnosticWarn", default = true })
+
   -- Separator
   hl(0, "ZeppelinSeparator", { link = "NonText", default = true })
 

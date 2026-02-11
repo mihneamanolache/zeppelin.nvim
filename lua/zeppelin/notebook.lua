@@ -123,7 +123,9 @@ local function place_status_extmark(bufnr, para, status)
     return
   end
 
-  local hl = status_hl_map[status] or "ZeppelinStatusReady"
+  -- Extract base status word for highlight lookup (e.g. "RUNNING 77%" → "RUNNING")
+  local base_status = status:match("^(%S+)") or status
+  local hl = status_hl_map[base_status] or "ZeppelinStatusReady"
   para.status = status
   para.status_extmark = vim.api.nvim_buf_set_extmark(bufnr, ns, start_pos[1], 0, {
     virt_text = { { " " .. status .. " ", hl } },
@@ -218,6 +220,126 @@ local function insert_output_lines(bufnr, para, lines, header_hl, body_hl)
   end
 end
 
+--------------------------------------------------------------------------------
+-- Progress bar + polling
+--------------------------------------------------------------------------------
+
+--- Build a progress bar string like "── Running ── ████████░░░░░░░░░░░░ 40%"
+---@param progress_pct number 0-100
+---@return string
+local function build_progress_line(progress_pct)
+  progress_pct = math.max(0, math.min(100, progress_pct or 0))
+  local bar_width = 30
+  local filled = math.floor(bar_width * progress_pct / 100)
+  local empty = bar_width - filled
+  local bar = string.rep("█", filled) .. string.rep("░", empty)
+  return string.format("── Running ── %s %d%%", bar, progress_pct)
+end
+
+--- Extract text lines from intermediate Zeppelin results.msg array.
+---@param results_data table|nil
+---@return string[]
+local function extract_streaming_lines(results_data)
+  local lines = {}
+  if not results_data or not results_data.msg or type(results_data.msg) ~= "table" then
+    return lines
+  end
+  for _, item in ipairs(results_data.msg) do
+    if item.data then
+      for _, text_line in ipairs(vim.split(item.data, "\n", { plain = true })) do
+        table.insert(lines, (strip_ansi(text_line)))
+      end
+    end
+  end
+  return lines
+end
+
+--- Safely stop and close a paragraph's poll timer.
+---@param para table
+local function stop_poll_timer(para)
+  if para._poll_timer then
+    para._poll_timer:stop()
+    para._poll_timer:close()
+    para._poll_timer = nil
+  end
+end
+
+--- Show progress indicator with optional streaming output lines.
+---@param bufnr number
+---@param para table
+---@param progress_pct number
+---@param streaming_lines string[]|nil
+local function show_progress_indicator(bufnr, para, progress_pct, streaming_lines)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  remove_output_lines(bufnr, para)
+
+  local lines = { build_progress_line(progress_pct) }
+  if streaming_lines and #streaming_lines > 0 then
+    table.insert(lines, "── Output (streaming) ──")
+    for _, l in ipairs(streaming_lines) do
+      table.insert(lines, l)
+    end
+  end
+
+  insert_output_lines(bufnr, para, lines, "ZeppelinRunning", "ZeppelinOutput")
+end
+
+--- Start a poll timer that queries paragraph status every 750ms.
+---@param bufnr number
+---@param para table
+---@param notebook_id string
+local function start_poll_timer(bufnr, para, notebook_id)
+  -- Defensive: stop any existing timer first
+  stop_poll_timer(para)
+
+  local uv = vim.uv or vim.loop
+  local timer = uv.new_timer()
+  para._poll_timer = timer
+
+  timer:start(750, 750, vim.schedule_wrap(function()
+    -- Bail out if timer was already cleared (POST completed)
+    if not para._poll_timer then
+      return
+    end
+    -- Bail out if buffer was closed
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      stop_poll_timer(para)
+      return
+    end
+
+    local path = string.format("/api/notebook/%s/paragraph/%s", notebook_id, para.id)
+    api.get(path, function(err, data)
+      -- Bail out if timer was already cleared
+      if not para._poll_timer then
+        return
+      end
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        stop_poll_timer(para)
+        return
+      end
+      if err or not data then
+        return -- Silently ignore poll errors
+      end
+
+      local progress = data.progress or 0
+      local status = data.status or "RUNNING"
+
+      -- Update status badge with percentage
+      if status == "RUNNING" then
+        local display_status = progress > 0 and string.format("RUNNING %d%%", progress) or "RUNNING"
+        place_status_extmark(bufnr, para, display_status)
+      end
+
+      -- Extract streaming output
+      local streaming_lines = extract_streaming_lines(data.results)
+      show_progress_indicator(bufnr, para, progress, streaming_lines)
+    end)
+  end))
+end
+
 --- Display output inline below a paragraph as real buffer lines.
 ---@param bufnr number
 ---@param para table paragraph metadata entry
@@ -237,7 +359,7 @@ end
 ---@param para table
 function M.show_running_indicator(bufnr, para)
   remove_output_lines(bufnr, para)
-  insert_output_lines(bufnr, para, { "  Running..." }, "ZeppelinRunning", "ZeppelinRunning")
+  insert_output_lines(bufnr, para, { build_progress_line(0) }, "ZeppelinRunning", "ZeppelinRunning")
 end
 
 --- Toggle output visibility for a paragraph.
@@ -548,6 +670,20 @@ function M.open_notebook(notebook_json)
     end,
   })
 
+  -- Clean up poll timers when buffer is closed
+  vim.api.nvim_create_autocmd("BufDelete", {
+    buffer = buf,
+    callback = function()
+      local buf_state = _buffers[buf]
+      if buf_state then
+        for _, p in ipairs(buf_state.paragraphs) do
+          stop_poll_timer(p)
+        end
+        _buffers[buf] = nil
+      end
+    end,
+  })
+
   local win = find_edit_window()
   vim.api.nvim_set_current_win(win)
   vim.api.nvim_win_set_buf(win, buf)
@@ -743,13 +879,19 @@ function M.run_paragraph()
 
   M.show_running_indicator(bufnr, para)
   place_status_extmark(bufnr, para, "RUNNING")
+  start_poll_timer(bufnr, para, state.notebook_id)
 
   local path = string.format("/api/notebook/run/%s/%s", state.notebook_id, para.id)
   api.post(path, {}, function(err, data)
+    stop_poll_timer(para)
+
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+
     if err then
       ui.show_popup("Failed to run paragraph: " .. err)
       place_status_extmark(bufnr, para, "ERROR")
-      -- Clear running indicator
       remove_output_lines(bufnr, para)
       return
     end
