@@ -134,13 +134,23 @@ function M.delete(path, callback)
   M.request("DELETE", path, nil, callback)
 end
 
+--- URL-encode a string for use in application/x-www-form-urlencoded bodies.
+---@param str string
+---@return string
+local function url_encode(str)
+  str = str:gsub("([^%w%-%.%_%~])", function(c)
+    return string.format("%%%02X", string.byte(c))
+  end)
+  return str
+end
+
 --- Authenticate with Zeppelin. Uses form-urlencoded POST and writes cookies.
 ---@param username string
 ---@param password string
 ---@param callback function callback(err, data)
 function M.authenticate(username, password, callback)
   local url = config.options.ZEPPELIN_URL .. "/api/login"
-  local form_body = "userName=" .. username .. "&password=" .. password
+  local form_body = "userName=" .. url_encode(username) .. "&password=" .. url_encode(password)
   local args = build_curl_args("POST", url, {
     body = form_body,
     write_cookies = true,
